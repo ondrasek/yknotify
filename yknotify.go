@@ -50,6 +50,7 @@ func (ts *TouchState) checkAndNotify() {
 		if bytes, err := json.Marshal(event); err == nil {
 			fmt.Println(string(bytes))
 		}
+		ts.fido2Needed = false
 	}
 	if ts.openPGPNeeded {
 		event := TouchEvent{
@@ -59,6 +60,7 @@ func (ts *TouchState) checkAndNotify() {
 		if bytes, err := json.Marshal(event); err == nil {
 			fmt.Println(string(bytes))
 		}
+		ts.openPGPNeeded = false
 	}
 	ts.lastNotify = now
 }
@@ -82,13 +84,6 @@ func streamLogs() error {
 	scanner := bufio.NewScanner(stdout)
 	yubiKeyClients := make(map[string]bool)
 
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		for range ticker.C {
-			state.checkAndNotify()
-		}
-	}()
-
 	for scanner.Scan() {
 		var entry LogEntry
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
@@ -107,6 +102,14 @@ func streamLogs() error {
 				if len(parts) == 2 {
 					clientID := strings.Split(parts[1], " ")[0]
 					yubiKeyClients[clientID] = true
+				}
+			}
+
+			if strings.Contains(msg, "close by IOHIDLibUserClient:") {
+				parts := strings.Split(msg, " close by ")
+				if len(parts) == 2 {
+					clientID := strings.Split(parts[1], " ")[0]
+					delete(yubiKeyClients, clientID)
 				}
 			}
 
